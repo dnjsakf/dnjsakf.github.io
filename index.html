@@ -4,9 +4,69 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hello, World</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js" integrity="sha512-bZS47S7sPOxkjU/4Bt0zrhEtWx0y0CRkhEp8IckzK+ltifIIE9EMIMTuT/mEzoIMewUINruDBIR/jJnbguonqQ==" crossorigin="anonymous"></script>
   </head>
   <body>
-    <h3>Hello, World!!!</h3>
-    <a href="post/첫번째-포스트">첫번째 포스트</a>
+    <input id="markets" name="markets" value="KRW-BTC">
+    <button onclick="handleStartInterval(event)">Start</button>
+    <button onClick="handleStopInterval(event)">stop</button>
+    <ul id="tickerlist"><ul>
   </body>
+  <script type="text/javascript">      
+    function getCurrentPrice(markets){
+      const resp = axios.get(
+        "https://api.upbit.com/v1/ticker", {
+        params: {
+          "count": "1",
+          "markets": markets
+        }
+      });
+      return resp;
+    }
+    
+    function setTickerList(tickers){
+      const ticker_list = document.querySelector("#tickerlist");
+      const ul = document.createElement("ul");
+      
+      tickers.forEach(function(t){
+        const li = ul.appendChild(document.createElement("li"));
+        li.appendChild(document.createTextNode(t.market));
+        li.appendChild(document.createTextNode(":"));
+        li.appendChild(document.createTextNode(t.trade_price||0));
+      });
+      
+      ticker_list.innerHTML = ul.innerHTML;
+    }
+    
+    function handleStopInterval(e){
+      let interval = localStorage.getItem("interval");
+      if( interval ){
+        try{
+          clearInterval(interval);
+        } catch ( error ){
+          console.error(error);
+        } finally {
+          interval = null;
+        }
+      }
+    }
+    
+    function handleStartInterval(e){
+      handleStopInterval();
+      
+      const interval = setInterval(async function(){
+        const markets = document.getElementById("markets").value;
+        const resp = await getCurrentPrice(markets);
+        if( resp.status == 200 ){
+          console.clear();
+          console.log(JSON.stringify(resp.data, null, 2));
+          
+          setTickerList(resp.data);
+          //console.log(JSON.stringify(resp.data.map(function(item){ return item.change_price; }), null, 2));
+        }
+      }, 500);
+      
+      localStorage.setItem("interval", interval);
+    }
+  </script>
 </html>
