@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sudoku</title>
+  <style type="text/css">
+    * { box-sizing: border-box; -moz-box-sizing: border-box; -webkit-box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; padding: 0; margin: 0; }
+    #sudoku-borad { padding: 3px; }
+  </style>
+  <script type="text/javascript">
+    (function(){
+      /* Polyfill: Object.assign */
+      if( Object.assign === undefined ) {
+        Object.defineProperty(Object, 'assign', {
+          enumerable: false,
+          configurable: true,
+          writable: true,
+          value: function(target) {
+            'use strict';
+            if (target === undefined || target === null) {
+              throw new TypeError('Cannot convert first argument to object');
+            }
+
+            var to = Object(target);
+            for (var i = 1; i < arguments.length; i++) {
+              var nextSource = arguments[i];
+              if (nextSource === undefined || nextSource === null) {
+                continue;
+              }
+              nextSource = Object(nextSource);
+
+              var keysArray = Object.keys(Object(nextSource));
+              for (var nextIndex = 0, len = keysArray.length; nextIndex < len; nextIndex++) {
+                var nextKey = keysArray[nextIndex];
+                var desc = Object.getOwnPropertyDescriptor(nextSource, nextKey);
+                if (desc !== undefined && desc.enumerable) {
+                  to[nextKey] = nextSource[nextKey];
+                }
+              }
+            }
+            return to;
+          }
+        });
+      }
+      
+      /* Polyfill: Element.getEventListeners */
+      if( Element.prototype.getEventListeners === undefined ){
+        Element.prototype._addEventListener = Element.prototype.addEventListener;
+        Element.prototype._removeEventListener = Element.prototype.removeEventListener;
+        
+        Element.prototype.addEventListener = function(type, listener, useCapture) {
+          var self = this;
+          
+          self._addEventListener(type, listener, useCapture||false);
+
+          if(!self.eventListenerList){
+            self.eventListenerList = {};
+          };
+          if(!self.eventListenerList[type]){
+            self.eventListenerList[type] = [];
+          };
+
+          self.eventListenerList[type].push({
+            type: type,
+            listener: listener,
+            useCapture: (useCapture||false)
+          });
+        };
+        Element.prototype.removeEventListener = function(type, listener, useCapture) {
+          var self = this;
+          
+          self._removeEventListener(type, listener, useCapture||false);
+
+          if(!self.eventListenerList){
+            self.eventListenerList = {};
+          }
+          if(!self.eventListenerList[type]){
+            self.eventListenerList[type] = [];
+          }
+
+          for(var i = 0; i < self.eventListenerList[type].length; i++){
+            if( self.eventListenerList[type][i].listener === listener
+                && self.eventListenerList[type][i].useCapture === Boolean(useCapture) ){
+                self.eventListenerList[type].splice(i, 1);
+                break;
+            }
+          }
+          if(self.eventListenerList[type].length==0){
+            delete self.eventListenerList[type];
+          };
+        };
+        Element.prototype.getEventListeners = function(type){
+          var self = this;
+          
+          if(!self.eventListenerList) self.eventListenerList = {};
+          if(typeof(type) == 'undefined') return self.eventListenerList;
+          return self.eventListenerList[type];
+        };
+      }
+      
+      /* Polyfill: Array.fill */
+      if( Array.prototype.fill === undefined ) {
+        Object.defineProperty(Array.prototype, 'fill', {
+          value: function(value) {
+
+            // Steps 1-2.
+            if (this == null) {
+              throw new TypeError('this is null or not defined');
+            }
+
+            var O = Object(this);
+
+            // Steps 3-5.
+            var len = O.length >>> 0;
+
+            // Steps 6-7.
+            var start = arguments[1];
+            var relativeStart = start >> 0;
+
+            // Step 8.
+            var k = relativeStart < 0 ?
+              Math.max(len + relativeStart, 0) :
+              Math.min(relativeStart, len);
+
+            // Steps 9-10.
+            var end = arguments[2];
+            var relativeEnd = end === undefined ?
+              len : end >> 0;
+
+            // Step 11.
+            var final = relativeEnd < 0 ?
+              Math.max(len + relativeEnd, 0) :
+              Math.min(relativeEnd, len);
+
+            // Step 12.
+            while (k < final) {
+              O[k] = value;
+              k++;
+            }
+
+            // Step 13.
+            return O;
+          }
+        });
+      }
+      
+      /* Polyfill: Array.shuffle */
+      if( Array.prototype.shuffle === undefined ){
+        Array.prototype.shuffle = function(){
+          return this.sort(function(a,b){
+            return Math.random() - 0.5;
+          });
+        }
+      }
+      
+      /* Polyfill: Array.range */
+      if( Array.range === undefined ){
+        Array.range = function(start, end){
+          return this(end - start + 1).fill(0).map(function(num,idx){
+            return num + idx + start;
+          });
+        }
+      }
+    })();
+  
+  </script>
+  <script type="text/javascript">
+    function getUniqueArray(array){
+      if( array.length > 1 ){
+        array = array.reduce(function(prev, crnt, idx){
+          if( idx == 1 ){
+            prev = prev ? [prev] : [];
+          }
+          if( crnt && prev.indexOf(crnt) == -1 ){
+            prev.push(crnt);
+          }
+          return prev;
+        });
+      }
+      return array;
+    }
+    
+    function ignoreRand(start, end, ignore){
+      const capacity = end-start+1;
+      const random = Math.floor((Math.random() * capacity) + start);
+
+      if ( ignore.length === 1 ){
+        if( !Boolean(ignore[0]) ){
+          ignore.pop();
+        }
+      } else if( ignore.length > 0 ){
+        let counter = 0;
+        for(let i = 0; i < ignore.length; i++){
+          counter += ( ignore[i] >= start && ignore[i] <= end ? 1 : 0 );
+          if( counter >= capacity ){
+            return null;
+          }
+        }
+      }
+      return [].concat(ignore).indexOf(random) == -1 ? random : ignoreRand(start, end, ignore);
+    }
+  </script>
+</head>
+<body>
+  <button id="reset">Reset</button>
+  <div id="sudoku-borad">
+    <canvas id="sudoku-canvas" width="480" height="320"></canvas>
+  </div>
+  <script type="text/javascript">
+    /**
+     * 1. Drawing sudoku borad levels
+     *    - Easy, Normal(Default), Hard
+     *    - Validation checker
+     * 
+     * 2. Drawing scores.
+     *    - Timer
+     * 
+     * 3. Drawing controller.
+     *    - Move button
+     *    - Select number pad.
+     *    - hint
+     *    - Options( highlighting )
+     */
+  </script>
+  <script type="text/javascript">
+    'use strict';
+    Element.prototype.sudoku = function(options){
+      const sudoku = new DochiSudoku(this, options);
+      sudoku.init();
+
+      return sudoku;
+    }
+
+    function DochiSudoku(_canvas, _config){
+      const config = {
+        ctx: "2d",
+        width: 480,
+        height: 480
+      }
+      let matrix = null;
+      let boxies = null;
+      let canvas = null;
+      let context = null;
+
+      if( _config instanceof Object ){
+        Object.assign( config, _config );
+      }
+      if( _canvas instanceof Element ){
+        canvas = _canvas;
+        context = _canvas.getContext(config.ctx);
+      }
+
+      this.default = {
+        width: 480,
+        height: 480,
+        outerCols: 3,
+        outerRows: 3,
+        innerCols: 3,
+        innerRows: 3,
+        startNum: 1,
+        endNum: 9,
+      }
+
+      this.getConfig = function(k,d){ return config[k]||d; }
+      this.setConfig = function(k,v){ config[k] = v; }
+      
+      this.getContext = function(){ return context; }
+      this.getCanvas = function(){ return canvas; }
+      this.setCanvas = function(c,t){ canvas = c; context = c.getContext(t); }
+      
+      this.getMatrix = function(){ return matrix; }
+      this.setMatrix = function(m){ matrix = m; }
+      
+      this.getBoxies = function(){ return boxies; }
+      this.setBoxies = function(b){ boxies = b; }
+      this.getBox = function(i){ return boxies ? boxies[i] : null }
+    }
+
+    DochiSudoku.prototype = (function(){
+
+      function _init(self){
+        _createMatrix(self);
+        _draw(self);
+      }
+
+      function _draw(self){
+        _drawCanvas(self);
+        _drawGrid(self);
+      }
+      
+      function _selectNumber(self, include, exclude){
+        const numbers = Array.range(1, 9).filter(function(num){
+          if( include && include.indexOf(num) != -1 ){
+            return true;
+          }
+          if( exclude && exclude.indexOf(num) != -1 ){
+            return false;
+          }
+          return true;
+        }).shuffle();
+
+        console.log(  numbers );
+
+        return numbers.pop()||null;
+      }
+
+      function _createMatrix(self){
+        const rows = self.default.outerRows * self.default.innerRows;
+        const cols = self.default.outerCols * self.default.innerCols;
+
+        const matrix = new Array(rows).fill(null).map(function(){ return new Array(cols).fill(0) });
+        const boxies = new Array(rows).fill(null).map(function(){ return new Array() });
+
+        for( let rowIdx = 0; rowIdx < rows; rowIdx++ ){
+          console.groupCollapsed("ROW-"+rowIdx);
+        
+          for( let colIdx = 0; colIdx < cols; colIdx++ ){
+            console.groupCollapsed("COL-"+colIdx);
+
+            const boxRowIdx = Math.floor(rowIdx / self.default.outerRows);
+            const boxColIdx = Math.floor(colIdx / self.default.outerCols)+(boxRowIdx*3);
+            
+            const row = matrix[rowIdx];
+            const col = matrix.map(function(r){ return r[colIdx]; });
+            const box = boxies[boxColIdx];
+
+            let include = []; // 필수 숫자
+            let exclude = []; // 제외 숫자
+            exclude = exclude.concat(row);  // 1. Row 중복 제거
+            exclude = exclude.concat(col);  // 2. Column 중복 제거
+            exclude = exclude.concat(box);  // 3. Box 중복 제거
+
+            /* 1. 첫번째 행은 그냥 그리기 */
+            if( rowIdx % 3 == 1 ){ // 박스의 가운데(1,4,7)
+              if( boxColIdx % 3 === 1 ){ // 가운데 박스(1,4,7)
+                const prevBox = boxies[boxColIdx-1]; // 왼쪽 박스(0,3,6)
+                const nextBox = boxies[boxColIdx+1]; // 오른쪽 박스(2,5,8)
+
+                // 1. 왼쪽 박스의 남아있는 숫자와 오른쪽 박스의 현재 숫자 교집합
+                const notExistsPrevBox = Array.range(1,9).filter(function(num){
+                  return ( prevBox.indexOf(num) == -1 && nextBox.indexOf(num) != -1 );
+                });
+                
+                // 2. 3자리가 아니라면 왼쪽 박스의 첫번째 행에서 데이터 추출
+                include = include.concat(notExistsPrevBox);
+                prevBox.slice(0,3).forEach(function(num){
+                  if( include.length < 3 && include.indexOf(num) == -1 ){
+                    include.push(num);
+                  }
+                });
+              }
+            }
+
+            include = getUniqueArray(include);
+            exclude = getUniqueArray(exclude);
+
+            const base = (include.length > 0 ? include : Array.range(1, 9)); 
+            const number = base.filter(function(num){
+              return ( exclude && exclude.indexOf(num) == -1 );
+            }).shuffle().pop()||null;
+
+            matrix[rowIdx][colIdx] = number;
+            boxies[boxColIdx].push(number);
+            
+            // 이전 Box의 남은 숫자를 반드시 포함
+            console.log('rowIdx', rowIdx);
+            console.log('colIdx', colIdx);
+            console.log('boxRowIdx', boxRowIdx);
+            console.log('boxColIdx', boxColIdx);
+            console.log('number', number);
+            console.log('include', include);
+            console.log('exclude', exclude);
+            console.log('box', box);
+            console.groupEnd("COL-"+colIdx);
+          }
+          
+          console.groupEnd("ROW-"+rowIdx);
+        }
+        console.log( matrix );
+        console.log( boxies );
+        
+        self.setMatrix(matrix);
+        self.setBoxies(boxies);
+      }
+
+      function _drawCanvas(self){
+        const canvas = self.getCanvas();
+        const ctx = self.getContext();
+
+        canvas.width = self.getConfig("width", self.default.width);
+        canvas.height = self.getConfig("height", self.default.height);
+
+        ctx.lineWidth = 4;
+        ctx.strokeRect(0, 0, canvas.width, canvas.height);
+      }
+
+      function _drawBlock(self, x, y, width, height, lineWidth){
+        const ctx = self.getContext();
+
+        ctx.lineWidth = ( lineWidth || 1 );
+        ctx.strokeRect(x, y, width, height);
+      }
+
+      function _drawText(self, text, x, y, width, height){
+        const ctx = self.getContext();
+        const textX = (x+(width/2)-(4.8*text.length));
+        const textY = (y+(height/2)+4);
+        ctx.font = "18px Arial";
+        ctx.fillText(text, textX, textY);
+      }
+
+      function _drawGrid(self){
+        const matrix = self.getMatrix();
+        const canvas = self.getCanvas();
+        const ctx = self.getContext();
+
+        const rows = self.default.outerRows * self.default.innerRows;
+        const cols = self.default.outerCols * self.default.innerCols;
+
+        const outerWidth = canvas.width / cols;
+        const outerHeight = canvas.height / rows;
+        
+        for(let row = 0; row < rows; row++){
+          for(let col = 0; col < cols; col++){
+            const x = col * outerWidth;
+            const y = row * outerHeight;
+
+            _drawBlock(self, x, y, outerWidth, outerHeight);
+            _drawText(self, String(matrix[row][col]), x, y, outerWidth, outerHeight);
+          }
+        }
+      }
+
+      return {
+        init: function(){
+          _init(this);
+        }
+      }
+    })();
+    
+    const sudoku = document.getElementById("sudoku-canvas").sudoku({
+      width: 480,
+      height: 480
+    });
+    document.getElementById("reset").addEventListener("click", function(e){
+      e.preventDefault();
+      sudoku.init();
+    });
+    
+  </script>
+</body>
+</html>
