@@ -183,8 +183,8 @@
       const aim = {
         size: 3,
         dist: {
-          now: 50,
-          min: 50,
+          now: shape.size.width*2,
+          min: 10,
           max: 200
         },
         pos: {
@@ -427,8 +427,8 @@
 
       const _draw = (self)=>{
         _drawPlayer(self); // Player 그리기
-        _drawAiming(self); // Aiming 그리기
-        _drawGuide(self); // Guide 그리기
+        //_drawAiming(self); // Aiming 그리기
+        //_drawGuide(self); // Guide 그리기
       }
 
       return {
@@ -924,7 +924,7 @@
     setInterval(addPlayer, Math.random()*1000);
 
     function addPlayer(){
-      const playerName = "Player-"+(stage.getPlayers().length+1);
+      const playerName = "NPC-"+(stage.getPlayers().length+1);
       const inputType = document.querySelector("[name=inputType]").value;
       const player = stage.getPlayer();
 
@@ -945,7 +945,14 @@
           follow: player,
           shape: {
             type: document.querySelector("[name=shape]").value,
-            color: document.querySelector("[name=color]").value
+            color: document.querySelector("[name=color]").value,
+            size: {
+              width: 10,
+              height: 10,
+            },
+            aim: {
+              
+            }
           },
         }
       );
