@@ -495,7 +495,7 @@
       }
       this.getPlayer = ()=>(player.me);
       this.setPlayer = (v)=>(player.me=v);
-      this.getPlayers = ()=>(player.me ? [player.me].concat(player.others) : player.others);
+      this.getPlayers = ()=>(player.others);
       this.addPlayer = (v)=>{
         player.others.push(v);
         state.players = player.others.length;
@@ -629,7 +629,7 @@
         self.setCtx(canvas.getContext("2d"));
       }
 
-      // Player 생성
+      // Main Player 생성
       const _initPlayer = (self)=>{
         const playerName = "me";
         const inputType = "wasd";
@@ -676,12 +676,39 @@
         let moveY = playerPos.y;
         
         // 입력 키에 따른 좌표값 설정
-        if( self.keyboardPressed() ){
-          if( self.keyboardPressed(KEYCODE.RIGHT) ){ moveX += playerSpeed; }
-          if( self.keyboardPressed(KEYCODE.LEFT) ){ moveX -= playerSpeed; }
-          if( self.keyboardPressed(KEYCODE.DOWN) ){ moveY += playerSpeed; }
-          if( self.keyboardPressed(KEYCODE.UP) ){ moveY -= playerSpeed; }
-        }
+        if( self.keyboardPressed(KEYCODE.RIGHT) ){ moveX += playerSpeed; }
+        if( self.keyboardPressed(KEYCODE.LEFT) ){ moveX -= playerSpeed; }
+        if( self.keyboardPressed(KEYCODE.DOWN) ){ moveY += playerSpeed; }
+        if( self.keyboardPressed(KEYCODE.UP) ){ moveY -= playerSpeed; }
+
+        // 좌표 최소/최대 설정
+        if( moveX < limitX[0] ){ moveX = limitX[0]; }
+        if( moveY < limitY[0] ){ moveY = limitY[0]; }
+        if( moveX > limitX[1] ){ moveX = limitX[1]; }
+        if( moveY > limitY[1] ){ moveY = limitY[1]; }
+
+        // 좌표로 설정
+        player.setMovePos(moveX, moveY);
+      }
+
+      // Player Pointer Pos
+      const _followPointer = (self, player)=>{
+        // Canvas 정보
+        const canvas = self.getCanvas();
+        const pointerPos = self.getPointerPos();
+
+        // Player 정보
+        const playerSize = player.getSize();
+        const playerInput = player.getConfig("inputType");
+        const playerPos = player.getMovePos();
+        const playerAimPos = player.getAimPos();
+        let playerSpeed = player.getMoveSpeed();
+
+        // 좌표값
+        const limitX = [0, canvas.width - playerSize.width];
+        const limitY = [0, canvas.height - playerSize.height];
+        let moveX = playerPos.x;
+        let moveY = playerPos.y;
 
         // 마우스,터치 입력 상태에 따른 좌표값 설정
         if( self.pointerPressed() ){
@@ -708,6 +735,37 @@
 
         // 좌표로 설정
         player.setMovePos(moveX, moveY);
+      }
+
+      // Player Pointer Pos
+      const _followPlayer = (self, player)=>{
+        // Player 정보
+        const follow = player.getConfig("follow");
+        const playerSize = player.getSize();
+        const playerInput = player.getConfig("inputType");
+        const playerPos = player.getMovePos();
+        const playerAimPos = follow.getMovePos();
+        let playerSpeed = player.getMoveSpeed();
+        
+        // Canvas 정보
+        const canvas = self.getCanvas();
+
+        // 좌표값
+        const limitX = [0, canvas.width - playerSize.width];
+        const limitY = [0, canvas.height - playerSize.height];
+        let moveX = playerPos.x;
+        let moveY = playerPos.y;
+
+        // 마우스,터치 입력 상태에 따른 좌표값 설정
+        const aimAngle = StageUtil.getAngle(moveX, moveY, playerAimPos.x, playerAimPos.y);
+        const aimDistPos = StageUtil.getMoveDistPos(playerSpeed, aimAngle, moveX, moveY);
+
+        moveX = aimDistPos.x;
+        moveY = aimDistPos.y;
+
+        // 좌표로 설정
+        player.setMovePos(moveX, moveY);
+        player.setAimPos(playerAimPos.x, playerAimPos.y);
       }
 
       // Player Aim 갱신
@@ -757,10 +815,14 @@
 
       // Player 그리기
       const _drawPlayers = (self)=>{
-        const players = self.getPlayers();
-        players.forEach((player)=>{
-          _updatePos(self, player); // Player 위치 갱신
-          _updateAim(self, player); // Player Aim 갱신
+        const mainPlayer = self.getPlayer();
+        mainPlayer.draw();
+
+        self.getPlayers().forEach((player)=>{
+          
+          _followPlayer(self, player);
+
+          // Player 그리기
           player.draw();
         });
       }
@@ -771,9 +833,10 @@
         function drawer(){
           _clear(self); // Canvas 초기화
           
-          //const player = self.getPlayer();
-          // _updatePos(self, player); // Player 위치 갱신
-          // _updateAim(self, player); // Player Aim 갱신
+          const player = self.getPlayer();
+          _updatePos(self, player); // Player 위치 갱신
+          _updateAim(self, player); // Player Aim 갱신
+          _followPointer(self, player); // Player Aim 갱신
 
           _drawStage(self); // Stage 그리기
           _drawPlayers(self); // Player 그리기
@@ -858,21 +921,40 @@
 
     const context = "/my-three-server/public";
 
-    function addPlayer(){
-      const rand = parseInt(Math.random()*30)*(Math.random()*15 > 7.5 ? 1 : -1);
+    setInterval(addPlayer, Math.random()*1000);
 
+    function addPlayer(){
       const playerName = "Player-"+(stage.getPlayers().length+1);
       const inputType = document.querySelector("[name=inputType]").value;
+      const player = stage.getPlayer();
 
-      stage.addPlayer(new Player(stage.getCanvas(), {
-        name: playerName,
-        inputType: inputType, 
-        shape: {
-          type: document.querySelector("[name=shape]").value,
-          color: document.querySelector("[name=color]").value
-        }}
-      ));
+      const randToggle = parseInt(Math.random()*1.5);
+      const randPos = {
+        x: ( randToggle === 0 ? Math.random()*stage.getWidth() : stage.getWidth() ),
+        y: ( randToggle === 0 ? stage.getHeight() : Math.random()*stage.getHeight() ),
+      }
+      const NPC = new Player(
+        stage.getCanvas(),
+        {
+          name: playerName,
+          inputType: inputType, 
+          pos: {
+            x: randPos.x,
+            y: randPos.y,
+          },
+          follow: player,
+          shape: {
+            type: document.querySelector("[name=shape]").value,
+            color: document.querySelector("[name=color]").value
+          },
+        }
+      );
+      NPC.setMoveSpeed(Math.random()*3+1);
+
+      stage.addPlayer(NPC);
     }
+  </script>
+  <script type="text/javascript">
     document.querySelector("#addPlayer").addEventListener("click", (e)=>{
       e.preventDefault();
       addPlayer();
